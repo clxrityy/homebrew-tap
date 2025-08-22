@@ -1,8 +1,10 @@
-# clxrityy Tap
+# clxrityy tap 🍺
 
 > My personal Homebrew tap
 
 A Homebrew tap for Python packages by @clxrityy. This tap provides easy installation of Python tools as system binaries.
+
+---
 
 ## 📦 Available Packages
 
