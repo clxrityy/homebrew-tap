@@ -1,0 +1,129 @@
+name: Auto-merge updates
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'automated-update') &&
+      github.actor == 'github-actions[bot]'
+
+    steps:
+      - name: Wait for checks to complete
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { number: pullNumber } = context.issue;
+
+            // Wait for status checks to complete
+            let allChecksComplete = false;
+            let attempts = 0;
+            const maxAttempts = 30; // 15 minutes max wait
+
+            while (!allChecksComplete && attempts < maxAttempts) {
+              attempts++;
+              
+              // Get the latest commit
+              const { data: pr } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pullNumber
+              });
+              
+              const sha = pr.head.sha;
+              
+              // Get status checks
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner,
+                repo,
+                ref: sha
+              });
+              
+              const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+                owner,
+                repo,
+                ref: sha
+              });
+              
+              console.log(`Attempt ${attempts}: Found ${checks.check_runs.length} checks and ${statuses.length} statuses`);
+              
+              // Check if all checks are complete
+              const pendingChecks = checks.check_runs.filter(check => 
+                check.status === 'queued' || check.status === 'in_progress'
+              );
+              
+              const pendingStatuses = statuses.filter(status => 
+                status.state === 'pending'
+              );
+              
+              if (pendingChecks.length === 0 && pendingStatuses.length === 0) {
+                // Check if all checks passed
+                const failedChecks = checks.check_runs.filter(check => 
+                  check.conclusion === 'failure' || check.conclusion === 'cancelled'
+                );
+                
+                const failedStatuses = statuses.filter(status => 
+                  status.state === 'failure' || status.state === 'error'
+                );
+                
+                if (failedChecks.length > 0 || failedStatuses.length > 0) {
+                  console.log('Some checks failed, will not auto-merge');
+                  console.log('Failed checks:', failedChecks.map(c => c.name));
+                  console.log('Failed statuses:', failedStatuses.map(s => s.context));
+                  return;
+                }
+                
+                allChecksComplete = true;
+                console.log('All checks passed!');
+              } else {
+                console.log(`Waiting for ${pendingChecks.length} checks and ${pendingStatuses.length} statuses to complete...`);
+                await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
+              }
+            }
+
+            if (!allChecksComplete) {
+              console.log('Timeout waiting for checks to complete');
+              return;
+            }
+
+            // Auto-merge the PR
+            try {
+              await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pullNumber,
+                merge_method: 'squash',
+                commit_title: `Auto-merge: ${pr.title}`,
+                commit_message: 'Automatically merged after successful tests'
+              });
+              
+              console.log(`Successfully merged PR #${pullNumber}`);
+              
+              // Add a comment
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pullNumber,
+                body: '🤖 This automated update has been successfully merged after passing all tests!'
+              });
+              
+            } catch (error) {
+              console.log('Failed to merge PR:', error.message);
+              
+              // Add a comment about the failure
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pullNumber,
+                body: `❌ Failed to auto-merge this PR: ${error.message}\n\nPlease merge manually if appropriate.`
+              });
+            }

@@ -1,0 +1,224 @@
+name: Auto-update formulas
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-formulas:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - name: autochange
+            pypi_name: autochange
+            formula_path: Formula/autochange.rb
+          - name: gatenet
+            pypi_name: gatenet
+            formula_path: Formula/gatenet.rb
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests packaging
+
+      - name: Check for updates
+        id: check_update
+        run: |
+          python3 - << 'EOF'
+          import requests
+          import re
+          import sys
+          import hashlib
+          import os
+          from packaging import version
+
+          package_name = "${{ matrix.package.pypi_name }}"
+          formula_path = "${{ matrix.package.formula_path }}"
+
+          # Get latest version from PyPI
+          try:
+              response = requests.get(f"https://pypi.org/pypi/{package_name}/json", timeout=30)
+              response.raise_for_status()
+              pypi_data = response.json()
+              latest_version = pypi_data["info"]["version"]
+
+              print(f"Latest version on PyPI: {latest_version}")
+
+              # Read current formula
+              with open(formula_path, 'r') as f:
+                  formula_content = f.read()
+
+              # Extract current version from formula
+              version_match = re.search(r'url\s+"[^"]*-(\d+\.\d+\.\d+)\.tar\.gz"', formula_content)
+              if not version_match:
+                  print("Could not find current version in formula")
+                  sys.exit(1)
+
+              current_version = version_match.group(1)
+              print(f"Current version in formula: {current_version}")
+
+              # Compare versions
+              if version.parse(latest_version) > version.parse(current_version):
+                  print(f"Update needed: {current_version} -> {latest_version}")
+
+                  # Get source distribution info
+                  source_url = f"https://pypi.org/packages/source/{package_name[0]}/{package_name}/{package_name}-{latest_version}.tar.gz"
+
+                  # Download and calculate SHA256
+                  print(f"Downloading {source_url}")
+                  download_response = requests.get(source_url, timeout=60)
+                  download_response.raise_for_status()
+
+                  sha256_hash = hashlib.sha256(download_response.content).hexdigest()
+                  print(f"SHA256: {sha256_hash}")
+
+                  # Set outputs for GitHub Actions
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"update_needed=true\n")
+                      f.write(f"current_version={current_version}\n")
+                      f.write(f"latest_version={latest_version}\n")
+                      f.write(f"source_url={source_url}\n")
+                      f.write(f"sha256={sha256_hash}\n")
+
+              else:
+                  print("No update needed")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"update_needed=false\n")
+
+          except Exception as e:
+              print(f"Error: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Update formula
+        if: steps.check_update.outputs.update_needed == 'true'
+        run: |
+          # Update the formula file
+          python3 - << 'EOF'
+          import re
+          import sys
+
+          formula_path = "${{ matrix.package.formula_path }}"
+          current_version = "${{ steps.check_update.outputs.current_version }}"
+          latest_version = "${{ steps.check_update.outputs.latest_version }}"
+          new_sha256 = "${{ steps.check_update.outputs.sha256 }}"
+          package_name = "${{ matrix.package.pypi_name }}"
+
+          print(f"Updating {formula_path} from {current_version} to {latest_version}")
+
+          with open(formula_path, 'r') as f:
+              content = f.read()
+
+          # Update URL
+          old_url_pattern = rf'url\s+"[^"]*{re.escape(package_name)}-{re.escape(current_version)}\.tar\.gz"'
+          new_url = f'url "https://pypi.org/packages/source/{package_name[0]}/{package_name}/{package_name}-{latest_version}.tar.gz"'
+          content = re.sub(old_url_pattern, f'  {new_url}', content)
+
+          # Update SHA256
+          sha256_pattern = r'sha256\s+"[a-f0-9]{64}"'
+          new_sha256_line = f'sha256 "{new_sha256}"'
+          content = re.sub(sha256_pattern, f'  {new_sha256_line}', content)
+
+          with open(formula_path, 'w') as f:
+              f.write(content)
+
+          print("Formula updated successfully")
+          EOF
+
+      - name: Set up Homebrew
+        if: steps.check_update.outputs.update_needed == 'true'
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test updated formula
+        if: steps.check_update.outputs.update_needed == 'true'
+        run: |
+          # Add the tap and test the formula
+          brew tap clxrityy/tap .
+          brew style clxrityy/tap/${{ matrix.package.name }}
+          brew audit clxrityy/tap/${{ matrix.package.name }}
+          # Install and test the formula
+          brew install --build-from-source clxrityy/tap/${{ matrix.package.name }}
+          brew test clxrityy/tap/${{ matrix.package.name }}
+
+      - name: Create Pull Request
+        if: steps.check_update.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            Update ${{ matrix.package.name }} to v${{ steps.check_update.outputs.latest_version }}
+
+            - Update version from ${{ steps.check_update.outputs.current_version }} to ${{ steps.check_update.outputs.latest_version }}
+            - Update SHA256 hash
+            - Formula tested and validated
+          title: "chore: update ${{ matrix.package.name }} to v${{ steps.check_update.outputs.latest_version }}"
+          body: |
+            ## 🤖 Automated Formula Update
+
+            This PR updates **${{ matrix.package.name }}** from `v${{ steps.check_update.outputs.current_version }}` to `v${{ steps.check_update.outputs.latest_version }}`.
+
+            ### Changes:
+            - ✅ Updated package version
+            - ✅ Updated SHA256 hash
+            - ✅ Passed style checks
+            - ✅ Passed audit checks
+            - ✅ Installation test passed
+            - ✅ Formula test passed
+
+            ### Package Info:
+            - **Package**: ${{ matrix.package.pypi_name }}
+            - **PyPI URL**: https://pypi.org/project/${{ matrix.package.pypi_name }}/
+            - **Source URL**: ${{ steps.check_update.outputs.source_url }}
+
+            This update was automatically generated by the auto-update workflow.
+          branch: update-${{ matrix.package.name }}-${{ steps.check_update.outputs.latest_version }}
+          branch-suffix: timestamp
+          delete-branch: true
+
+      - name: Add auto-merge label
+        if: steps.check_update.outputs.update_needed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find the PR that was just created
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:update-${{ matrix.package.name }}-${{ steps.check_update.outputs.latest_version }}`,
+              sort: 'created',
+              direction: 'desc'
+            });
+
+            if (prs.length > 0) {
+              const pr = prs[0];
+
+              // Add labels
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['automated-update', 'dependencies']
+              });
+
+              console.log(`Added labels to PR #${pr.number}`);
+            }
