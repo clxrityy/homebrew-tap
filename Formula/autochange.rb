@@ -3,7 +3,7 @@ class Autochange < Formula
 
   desc "Lightweight semantic version + changelog manager"
   homepage "https://github.com/clxrityy/autochange"
-  url "https://files.pythonhosted.org/packages/source/a/autochange/autochange-0.1.1.tar.gz"
+  url "https://pypi.org/packages/source/a/autochange/autochange-0.1.1.tar.gz"
   sha256 "9ea133e1141bade1aac1063e65ca81752df605f0311dcef244032442dbd960e8"
   license "MIT"
 
@@ -56,7 +56,7 @@ class Autochange < Formula
   test do
     system "#{bin}/autochange", "init"
     changelog = testpath/"CHANGELOG.md"
-    assert_predicate changelog, :exist?
+    assert_path_exists changelog
     content = changelog.read
     assert_match "# Changelog", content
     assert_match "## Unreleased - UNRELEASED", content
