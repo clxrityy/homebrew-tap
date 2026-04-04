@@ -2,7 +2,7 @@
 
 my [homebrew](https://brew.sh/) tap
 
-```bash
+```zsh
 brew tap clxrityy/tap
 ```
 
