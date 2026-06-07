@@ -19,7 +19,7 @@ brew tap clxrityy/tap
     </tr>
   </thead>
   <tbody>
-<tr>
+<tr id="licensor">
   <td>
 
   [Licensor](https://github.com/clxrityy/licensor?tab=readme-ov-file#licensor)
@@ -36,7 +36,7 @@ brew install --cask licensor
 
 </td>
 </tr>
-<tr>
+<tr id="bonds">
   <td>
 
   [Bonds](https://bonds.fyi)
