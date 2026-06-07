@@ -36,5 +36,22 @@ brew install --cask licensor
 
 </td>
 </tr>
+<tr>
+  <td>
+
+  [Bonds](https://bonds.fyi)
+
+  </td>
+  <td>
+    A CLI for creating and managing symlink-based bonds
+  </td>
+<td>
+
+```zsh
+brew install clxrityy/tap/bonds
+```
+
+</td>
+</tr>
   </tbody>
 </table>
