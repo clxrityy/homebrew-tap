@@ -31,7 +31,7 @@ brew tap clxrityy/tap
 <td>
 
 ```zsh
-brew install --cask licensor
+brew install --cask clxrityy/tap/licensor
 ```
 
 </td>
@@ -39,7 +39,7 @@ brew install --cask licensor
 <tr id="bonds">
   <td>
 
-  [Bonds](https://bonds.fyi)
+  [bonds](https://bonds.fyi)
 
   </td>
   <td>
@@ -49,6 +49,24 @@ brew install --cask licensor
 
 ```zsh
 brew install clxrityy/tap/bonds
+```
+
+</td>
+</tr>
+
+<tr id="rawget">
+  <td>
+
+  [rawget](https://github.com/clxrityy/rawget)
+
+  </td>
+  <td>
+    A lightweight CLI tool for downloading files from URLs
+  </td>
+<td>
+
+```zsh
+brew install clxrityy/tap/rawget
 ```
 
 </td>
