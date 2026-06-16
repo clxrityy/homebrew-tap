@@ -7,7 +7,7 @@ class Rawget < Formula
   sha256 "09edf626bcf57cc4705d992d9c626f822f2e07535e76b6174f675b7aa5a2be14"
   license "MIT"
 
-  depends_on "python@3.10"
+  depends_on "python@3.14"
 
   def install
     virtualenv_install_with_resources
