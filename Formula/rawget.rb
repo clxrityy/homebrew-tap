@@ -3,7 +3,7 @@ class Rawget < Formula
 
   desc "Lightweight CLI tool for downloading files from URLs"
   homepage "https://github.com/clxrityy/rawget"
-  url "https://files.pythonhosted.org/packages/c3/21/4cb02c630d815b5866b35f3d26dc88de211fd2bab85195e8fd405c56eae7/rawget-0.11.1-py3-none-any.whl"
+  url "https://files.pythonhosted.org/packages/95/3a/4b9f3b6f65728b9bbb95d452d7e523f85262df2578c950ec4097784e05f5/rawget-0.11.1.tar.gz"
   sha256 "09edf626bcf57cc4705d992d9c626f822f2e07535e76b6174f675b7aa5a2be14"
   license "MIT"
 
